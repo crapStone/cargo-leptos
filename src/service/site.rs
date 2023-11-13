@@ -11,7 +11,7 @@ use crate::{
     config::ProjectConfig,
     ext::{
         anyhow::{Context, Result},
-        fs, PathBufExt,
+        fs, with_hash, PathBufExt,
     },
 };
 
@@ -163,7 +163,8 @@ impl Site {
             return Ok(false);
         }
 
-        fs::write(&file.dest, &data).await?;
+        let dest = with_hash(&file.dest, new_hash);
+        fs::write(dest, &data).await?;
 
         let mut reg = self.file_reg.write().await;
         reg.insert(file.site.to_string(), new_hash);

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::ChangeSet;
 use crate::config::Project;
-use crate::ext::fs;
+use crate::ext::{fs, hash_and_extend};
 use crate::ext::sync::{wait_interruptible, CommandResult};
 use crate::service::site::SiteFile;
 use crate::signal::{Interrupt, Outcome, Product};
@@ -104,7 +104,7 @@ pub fn build_cargo_front_cmd(
 }
 
 async fn bindgen(proj: &Project) -> Result<Outcome<Product>> {
-    let wasm_file = &proj.lib.wasm_file;
+    let mut wasm_file = proj.lib.wasm_file.clone();
     let interrupt = Interrupt::subscribe_any();
 
     log::info!("Front compiling WASM");
@@ -119,8 +119,12 @@ async fn bindgen(proj: &Project) -> Result<Outcome<Product>> {
         .generate_output()
         .dot()?;
 
-    bindgen.wasm_mut().emit_wasm_file(&wasm_file.dest).dot()?;
-    log::trace!("Front wrote wasm to {:?}", wasm_file.dest.as_str());
+    // TODO (#125)
+    let data = bindgen.wasm_mut().emit_wasm();
+    wasm_file.dest = hash_and_extend(&wasm_file.dest, &data);
+    fs::write(&wasm_file.dest, &data).await.dot()?;
+    log::trace!("Front wrote wasm to {:?}", wasm_file.dest.to_string());
+
     if proj.release {
         match optimize(&wasm_file.dest, interrupt).await.dot()? {
             CommandResult::Interrupted => return Ok(Outcome::Stopped),
@@ -137,7 +141,7 @@ async fn bindgen(proj: &Project) -> Result<Outcome<Product>> {
 
     let wasm_changed = proj
         .site
-        .did_file_change(&proj.lib.wasm_file.as_site_file())
+        .did_file_change(&wasm_file.as_site_file())
         .await
         .dot()?;
     js_changed |= proj

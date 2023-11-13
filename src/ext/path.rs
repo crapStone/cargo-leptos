@@ -233,3 +233,22 @@ pub fn determine_pdb_filename(path: &Utf8PathBuf) -> Option<Utf8PathBuf> {
         None => None,
     }
 }
+
+/// Hashes the `content` and extends the `path` with the calculated hash.
+///
+/// `<file_stem>-<hash>.<extension>`
+pub fn hash_and_extend<C: AsRef<[u8]>>(path: &Utf8PathBuf, contents: C) -> Utf8PathBuf {
+    let hash = seahash::hash(contents.as_ref());
+
+    with_hash(path, hash)
+}
+
+/// Extends the `path` with the `hash`.
+///
+/// `<file_stem>-<hash>.<extension>`
+pub fn with_hash(path: &Utf8PathBuf, hash: u64) -> Utf8PathBuf {
+    let stem = path.file_stem().unwrap_or_default();
+    let extension = path.extension().unwrap_or_default();
+
+    path.with_file_name(format!("{stem}-{hash:x}.{extension}"))
+}
